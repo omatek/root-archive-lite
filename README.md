@@ -10,7 +10,7 @@ An independent academic demonstration for an undergraduate Cloud Computing cours
 - Dedicated D1: `root-archive-lite-db`
 - Dedicated private R2: `root-archive-lite-files`
 
-The code is preconfigured for these hostnames. Cloudflare resources and Google credentials must still be created and configured; no deployment has been performed. The original archive is not involved.
+**Deployment status (24 November 2026): deployed.** Both Pages and the Worker build from `omatek/root-archive-lite` (`main`). All three custom domains are assigned, HTTPS requests to each passed, and the dedicated D1 and private R2 bindings are verified. The original archive is not involved. Public browsing and PDF delivery have passed live HTTP tests. Authenticated uploads remain disabled until the actual AUM Workspace hosted-domain claim is confirmed.
 
 ## Architecture
 
@@ -40,7 +40,8 @@ Pages serves the interface and courses.json. The Worker is the HTTP API and secu
 - `backend/worker.js`: all API logic (204 physical lines, including comments and blank lines).
 - `backend/schema.sql`: one `resources` table.
 - `backend/wrangler.toml`: deployment bindings and settings.
-- `backend/package.json`: jose (runtime JWT verification) and Wrangler (development/deployment).
+- `backend/package.json`: jose (runtime JWT verification) and Wrangler (development/deployment), pinned to the versions used in the verified build.
+- `backend/smoke-test.mjs`: live HTTP smoke tests, run after Worker deployments; not part of the 204-line runtime.
 
 Keep `frontend` and `backend` next to each other: the Worker imports the course catalog and category list from the frontend. There is no frontend build step.
 
@@ -71,29 +72,31 @@ Protected requests send `Authorization: Bearer <Google ID token>`. Errors are JS
 
 ## 1. Set up Google Identity Services
 
-Create a **new academic Google OAuth client**, not the production client:
+The separate academic OAuth client is already configured consistently in the frontend and Worker. Do not create a replacement or use the production client. For reference, the original setup procedure is:
 
 1. In Google Cloud Console, select or create a separate project. Configure Google Auth Platform branding, audience, and any required test users. If you control a Workspace organization, an Internal audience may be appropriate; otherwise use External with the applicable testing configuration.
 2. Create an OAuth client of type **Web application**. Add `http://localhost` and `http://localhost:8000` to Authorized JavaScript origins for local development. For deployment, add `https://archive-lite.rootamman.com` as an Authorized JavaScript origin. Neither the API nor the assets hostname is a browser sign-in origin. No redirect URI is needed for this popup/callback flow.
 3. Copy the client ID to `frontend/js/config.mjs` (`googleClientId`) and `backend/wrangler.toml` (`GOOGLE_CLIENT_ID`). Never put an OAuth client secret in frontend code; this flow does not need one.
 4. Set `GOOGLE_HOSTED_DOMAIN` in `wrangler.toml` to the **actual** AUM Google Workspace hosted-domain claim. Confirm it through the university or inspect a token obtained through your own legitimate login locally. Do not upload tokens to third-party decoders. A student email suffix does not necessarily equal the Workspace `hd` claim. The placeholder deliberately rejects student uploads until configured.
-5. Optionally set `ADMIN_EMAILS` to a comma-separated list of verified Google-managed addresses, e.g. your own Gmail or an appropriate Workspace account. Administrators may edit/delete every resource, but may only upload if they are also eligible students. Set `DEMO_EMAILS` to the approved team/professor addresses if you want to restrict all writes to those accounts. Administrators must also be included when that list is nonempty.
+5. `ADMIN_EMAILS` is already configured as a private Worker secret, rather than committing the administrator address to the public repository. To update it, use the Lite Worker's Variables and Secrets settings or `npx wrangler secret put ADMIN_EMAILS` from `backend/`. `keep_vars = true` preserves dashboard variables across deploys. Administrators may edit/delete every resource, but may only upload if they are also eligible students. Set `DEMO_EMAILS` to the approved team/professor addresses if you want to restrict all writes to those accounts. Administrators must also be included when that list is nonempty.
 
 Google's documented GIS verification guidance: https://developers.google.com/identity/gsi/web/guides/verify-google-id-token
 
-## 2. Create isolated Cloudflare resources
+## 2. Existing isolated Cloudflare resources
 
-Install Node.js 22+ and npm. From the extracted project folder:
+The dedicated resources have already been provisioned and the remote schema applied. **Do not recreate them.**
 
-```bash
-cd backend
-npm install
-npx wrangler login
-npx wrangler d1 create root-archive-lite-db
-npx wrangler r2 bucket create root-archive-lite-files
-```
+| Resource | Name / identifier |
+|---|---|
+| Pages project | `root-archive-lite` |
+| Worker | `root-archive-lite` |
+| D1 database | `root-archive-lite-db` |
+| D1 database ID | `6da50390-2a11-4486-a8a1-86513b44e372` |
+| Private R2 bucket | `root-archive-lite-files` |
 
-If the names already exist, verify they belong to this academic demo before using them, or choose new Lite-specific names. Do not use production resources. Copy the D1 database UUID returned by Wrangler into `database_id` in `wrangler.toml`. Update the database/bucket names there if you chose different names. Keep the R2 bucket private (do not enable public access or an R2 public custom domain).
+The two bindings in `backend/wrangler.toml` already reference the correct resources. Public R2 access (both `r2.dev` and bucket custom domains) is disabled. The Worker delivers PDFs. The three Lite custom domains are configured; no production/staging resources were changed.
+
+Install Node.js 22+ and dependencies (`cd backend && npm install`) if developing locally.
 
 ## 3. Run locally
 
@@ -112,42 +115,28 @@ python3 -m http.server 8000 --directory frontend
 
 Visit `http://localhost:8000`. The frontend automatically selects the local API only at `http://localhost:8000`; `npm run dev` overrides the Worker CORS origin and PDF delivery origin for local testing only. No changes to the deployed URLs are necessary. Use localhost consistently, not a mix of `127.0.0.1` and `localhost`. If ports change, update the local-origin check in `config.mjs` and the dev script in `package.json` accordingly. Local D1 and R2 state is separate from deployed state. Google sign-in requires network access and the configured OAuth client even in local mode. Run `npm run check` to check Worker syntax.
 
-## 4. Deploy to Cloudflare — custom domains
+## 4. Existing Cloudflare deployment — Git-based updates
 
-Before deploying, confirm the `rootamman.com` zone is in the Cloudflare account used by Wrangler and that `archive-lite.rootamman.com`, `api-lite.rootamman.com` and `assets-lite.rootamman.com` are not already assigned to another project or DNS record. Do not remove or replace any existing records without verifying ownership. The production archive's hostnames and resources must remain untouched.
+Both the Pages project and Worker are already connected to `omatek/root-archive-lite`, branch `main`. Push updates to that repository rather than creating another project.
 
-1. Complete sections 1 and 2: set the dedicated D1 UUID, Google client ID in both files, actual Workspace hosted domain and any admin/demo allowlists. The deployed CORS origin, asset origin and frontend API URL are already set to the intended hostnames.
-2. From `backend/`, initialize the remote Lite database and deploy the Worker:
+- Pages: repository root `/`, no build command, output directory `frontend`. Custom domain: `archive-lite.rootamman.com`.
+- Workers Builds: root directory `backend`, build command `npm install --no-audit --no-fund`, deploy command `npx wrangler deploy && node smoke-test.mjs`.
+- Wrangler registers `api-lite.rootamman.com` and `assets-lite.rootamman.com` as custom domains of the same Worker. `workers.dev` and Worker preview URLs are disabled.
+- The backend imports the catalog and category definitions from the frontend, so changes to these shared files need both deployments.
+- For manual Worker deployments from a network-enabled terminal, run `npm install` and `npx wrangler deploy` from `backend/` after authenticating Wrangler to the correct account. Do not create another Pages project or attempt a direct upload into the connected Git project.
 
-   ```bash
-   npx wrangler d1 execute root-archive-lite-db --remote --file=./schema.sql
-   npx wrangler deploy
-   ```
+The D1 schema is already initialized. `npx wrangler d1 execute root-archive-lite-db --remote --file=./schema.sql` is idempotent, but not needed for routine deployment. Do not target any production resources.
 
-   Wrangler's two `[[routes]]` entries register `api-lite.rootamman.com` and `assets-lite.rootamman.com` as Custom Domains on the same Worker. Cloudflare manages its DNS record and TLS certificate. `workers_dev` and `preview_urls` are disabled in configuration. Wait for both custom domains to become active, then test:
+Verify live guest functionality with:
 
-   ```bash
-   curl -i -H 'Origin: https://archive-lite.rootamman.com' https://api-lite.rootamman.com/resources
-   ```
+```bash
+cd backend
+node smoke-test.mjs
+```
 
-   Expect HTTP 200, a JSON resource list (initially empty), and `Access-Control-Allow-Origin: https://archive-lite.rootamman.com`. Also run `curl -i https://assets-lite.rootamman.com/resources` (expect 404). After uploading a synthetic PDF, confirm its returned `asset_url` uses `https://assets-lite.rootamman.com/files/` and opens successfully.
-3. Create and deploy the dedicated Pages project from `backend/`:
+The optional `LITE_TEST_ASSET_KEY` environment variable checks an explicitly seeded synthetic PDF fixture; do not set it for routine deployments. The temporary fixture used during deployment was removed from both D1 and R2.
 
-   ```bash
-   npx wrangler pages project create root-archive-lite --production-branch main
-   npx wrangler pages deploy ../frontend --project-name root-archive-lite --branch main
-   ```
-
-   If the name is already used, confirm it is this academic project before deploying; otherwise choose a new Lite-specific name and use it consistently in both commands.
-4. In Cloudflare Dashboard → Workers & Pages → the new Lite Pages project → Custom domains → Set up a custom domain, enter `archive-lite.rootamman.com`. Follow the dashboard confirmation to activate the domain and its TLS certificate. Associate it with Pages before manually adding any DNS record; if the zone is in the same account, Pages can manage the CNAME automatically. Do not use the production Pages project.
-5. Open https://archive-lite.rootamman.com after activation and perform the functional checklist below. The deployed API accepts browser requests from that exact origin; the default Pages subdomain and preview sites are not configured as alternate application origins. Optionally redirect the Lite Pages project's own pages.dev URL to the custom domain using Cloudflare's documented Bulk Redirects procedure (not a wildcard affecting other projects).
-6. When changing Worker configuration or the catalog, redeploy the Worker; after editing frontend files, redeploy Pages. Local testing still works with `npm run dev` and the local static server without changing deployed URLs.
-
-References:
-- https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
-- https://developers.cloudflare.com/pages/configuration/custom-domains/
-- https://developers.cloudflare.com/pages/how-to/redirect-to-custom-domain/
-- https://developers.cloudflare.com/d1/get-started/
+The remaining required configuration is the verified `GOOGLE_HOSTED_DOMAIN` claim. Replace its placeholder with the actual Workspace domain, commit the change, then test sign-in and authenticated CRUD. Verify the existing OAuth client's Authorized JavaScript origins includes `https://archive-lite.rootamman.com`.
 
 ## Backend walkthrough for the professor
 
@@ -169,7 +158,7 @@ References:
 |---|---|
 | Increase the upload size | `MAX_FILE_MB` in `backend/wrangler.toml` and `maxFileSize` in `frontend/js/config.mjs` (MiB × 1024 × 1024) |
 | Change the student email domain | `STUDENT_EMAIL_DOMAIN` and corresponding verified `GOOGLE_HOSTED_DOMAIN` in Wrangler config |
-| Add an administrator | Append the Google-managed email to `ADMIN_EMAILS` (and `DEMO_EMAILS` if used) |
+| Add an administrator | Update the Lite Worker secret `ADMIN_EMAILS` with the Google-managed address (and `DEMO_EMAILS` if used) |
 | Change allowed resource categories | Update `TYPES` and `TYPE_HEADINGS` in `frontend/js/config.mjs`; the Worker imports `TYPES` from the same file |
 | Change editable fields | Modify `metadata()`, `modifyResource()`'s SQL UPDATE and the frontend form/PATCH payload. Add a schema migration only if introducing a new column |
 | Change order | Change `ORDER BY id DESC` in `listResources()`; the frontend retains server order inside each category |
@@ -189,16 +178,19 @@ References:
 - [ ] Delete a resource; D1 row and R2 object disappear, old file URL returns 404.
 - [ ] Verify exact-origin CORS, token expiration/re-login and mobile layout.
 
-## Validation performed in the implementation environment
+## Deployment validation — 24 November 2026
 
-- Node syntax checks for all frontend modules and Worker passed.
-- Before the asset-hostname change, fourteen simulated backend check groups passed using Node's real in-memory SQLite with a D1-shaped adapter, in-memory R2 adapter and a test-only mock of Google token verification. Tested CRUD, authorization, CORS, PDF checks, failure compensation, deletion retry and allowlist. The deployed Worker does not contain the mock.
-- The original course catalog was preserved byte-for-byte. Static paths and production references were checked.
-- npm registry access failed; jose and Wrangler could not be installed here. No real JWT signature verification, Wrangler bundling, Cloudflare D1/R2 execution, or live deployment was performed. The actual hosted-domain setting must be confirmed.
-- A Chromium UI test was attempted but local browser navigation was blocked by the environment. Use the functional checklist above to validate actual UI behavior.
+- Cloudflare Pages production deployment succeeded (`beaf1dee-037d-418a-8400-81b804db163d`), and the frontend domain was marked active.
+- Workers Builds deployment and live smoke tests succeeded (`54c2b5bb-baab-437b-8bfd-e796a683c809`; Worker version `3bba4b77-1a79-4473-910c-9cf51b9795ef`).
+- Actual HTTPS requests: frontend and course catalog returned 200; catalog contains 127 courses; API listing returned 200; exact-origin CORS and preflight (204) passed; untrusted origins received no matching allow-origin header.
+- Unauthenticated POST, PATCH, DELETE and invalid bearer-token upload returned 401. The asset hostname rejected listing and CRUD endpoints with 404.
+- A synthetic PDF and corresponding metadata row were temporarily seeded directly into the Lite R2 bucket and D1 table. The API returned the expected asset hostname and omitted the private owner identifier. The PDF route returned 200, `application/pdf`, and a valid PDF signature. The row, object and temporary build variable were subsequently removed; D1 contains zero rows, and R2 contains no matching test object. This was a storage-and-delivery test, not an authenticated upload/edit/delete test.
+- JavaScript syntax, local Wrangler build, local D1 initialization, local Worker response, catalog search, track/material filters, pagination and route serialization passed. Chromium navigation was blocked by the execution environment, so interactive UI and browser-console checks are not verified.
+- Google sign-in initialization, Workspace hosted-domain eligibility, authenticated CRUD, owner and administrator authorization with real accounts still require an interactive legitimate Google login. The configured hosted-domain placeholder deliberately prevents student uploads until confirmed.
+- The original 204-line Worker and existing visual identity were preserved. No non-Lite infrastructure was modified.
 
 ## Limitations and demonstration safety
 
 This is intentionally not a production application. Public read access is by design; do not publish actual student records or private course content. `DEMO_EMAILS` can limit writes to project members and professor but does not make reads private. For a wholly private demo, run on a local machine and present from that machine, or use an institution-approved access gateway covering both the Pages and Worker origins (including direct API access); no gateway is implemented here. Do not treat CORS as access control. A professor with a non-student account may be made an admin to edit/delete, but cannot upload unless eligible.
 
-There is no moderation, malware scanning, rate limiting, bot protection, revision history, automated cleanup, paging of resource API results, or custom account/session system. PDF signature checking is not malware detection. Uploads are buffered after multipart parsing; the file limit is not an end-to-end streaming request-size limiter. No reliable atomic transaction spans D1/R2; unexpected outages or concurrent writes can produce temporary inconsistency, and an orphan file may require manual removal. If an insert outcome is ambiguous during a network failure, inspect D1/R2 before cleanup. ID tokens live in memory only and expire; sign in again after expiry/reload. Google authentication and public API hosting need live testing before classroom use. Remove demo content after assessment.
+There is no moderation, malware scanning, rate limiting, bot protection, revision history, automated cleanup, paging of resource API results, or custom account/session system. PDF signature checking is not malware detection. Uploads are buffered after multipart parsing; the file limit is not an end-to-end streaming request-size limiter. No reliable atomic transaction spans D1/R2; unexpected outages or concurrent writes can produce temporary inconsistency, and an orphan file may require manual removal. If an insert outcome is ambiguous during a network failure, inspect D1/R2 before cleanup. ID tokens live in memory only and expire; sign in again after expiry/reload. Google authentication and authenticated CRUD need live testing before classroom use. Remove demo content after assessment.
