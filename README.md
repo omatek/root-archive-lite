@@ -10,7 +10,7 @@ An independent academic demonstration for an undergraduate Cloud Computing cours
 - Dedicated D1: `root-archive-lite-db`
 - Dedicated private R2: `root-archive-lite-files`
 
-**Deployment status (24 November 2026): deployed.** Both Pages and the Worker build from `omatek/root-archive-lite` (`main`). All three custom domains are assigned, HTTPS requests to each passed, and the dedicated D1 and private R2 bindings are verified. The original archive is not involved. Public browsing and PDF delivery have passed live HTTP tests. Authenticated uploads remain disabled until the actual AUM Workspace hosted-domain claim is confirmed.
+**Deployment status (24 November 2026): deployed.** Both Pages and the Worker build from `omatek/root-archive-lite` (`main`). All three custom domains are assigned, HTTPS requests to each passed, and the dedicated D1 and private R2 bindings are verified. The original archive is not involved. Public browsing and PDF delivery have passed live HTTP tests. The project owner confirmed the Workspace hosted domain as `std.aum.edu.jo`; real Google sign-in and authenticated CRUD remain to be tested.
 
 ## Architecture
 
@@ -77,7 +77,7 @@ The separate academic OAuth client is already configured consistently in the fro
 1. In Google Cloud Console, select or create a separate project. Configure Google Auth Platform branding, audience, and any required test users. If you control a Workspace organization, an Internal audience may be appropriate; otherwise use External with the applicable testing configuration.
 2. Create an OAuth client of type **Web application**. Add `http://localhost` and `http://localhost:8000` to Authorized JavaScript origins for local development. For deployment, add `https://archive-lite.rootamman.com` as an Authorized JavaScript origin. Neither the API nor the assets hostname is a browser sign-in origin. No redirect URI is needed for this popup/callback flow.
 3. Copy the client ID to `frontend/js/config.mjs` (`googleClientId`) and `backend/wrangler.toml` (`GOOGLE_CLIENT_ID`). Never put an OAuth client secret in frontend code; this flow does not need one.
-4. Set `GOOGLE_HOSTED_DOMAIN` in `wrangler.toml` to the **actual** AUM Google Workspace hosted-domain claim. Confirm it through the university or inspect a token obtained through your own legitimate login locally. Do not upload tokens to third-party decoders. A student email suffix does not necessarily equal the Workspace `hd` claim. The placeholder deliberately rejects student uploads until configured.
+4. Set `GOOGLE_HOSTED_DOMAIN` in `wrangler.toml` to the **actual** AUM Google Workspace hosted-domain claim. Confirm it through the university or inspect a token obtained through your own legitimate login locally. Do not upload tokens to third-party decoders. A student email suffix does not necessarily equal the Workspace `hd` claim. The deployed configuration uses `std.aum.edu.jo`, confirmed by the project owner.
 5. `ADMIN_EMAILS` is already configured as a private Worker secret, rather than committing the administrator address to the public repository. To update it, use the Lite Worker's Variables and Secrets settings or `npx wrangler secret put ADMIN_EMAILS` from `backend/`. `keep_vars = true` preserves dashboard variables across deploys. Administrators may edit/delete every resource, but may only upload if they are also eligible students. Set `DEMO_EMAILS` to the approved team/professor addresses if you want to restrict all writes to those accounts. Administrators must also be included when that list is nonempty.
 
 Google's documented GIS verification guidance: https://developers.google.com/identity/gsi/web/guides/verify-google-id-token
@@ -136,7 +136,7 @@ node smoke-test.mjs
 
 The optional `LITE_TEST_ASSET_KEY` environment variable checks an explicitly seeded synthetic PDF fixture; do not set it for routine deployments. The temporary fixture used during deployment was removed from both D1 and R2.
 
-The remaining required configuration is the verified `GOOGLE_HOSTED_DOMAIN` claim. Replace its placeholder with the actual Workspace domain, commit the change, then test sign-in and authenticated CRUD. Verify the existing OAuth client's Authorized JavaScript origins includes `https://archive-lite.rootamman.com`.
+The `GOOGLE_HOSTED_DOMAIN` is configured as `std.aum.edu.jo`, confirmed by the project owner. Test sign-in and authenticated CRUD. Verify the existing OAuth client's Authorized JavaScript origins includes `https://archive-lite.rootamman.com`.
 
 ## Backend walkthrough for the professor
 
@@ -186,7 +186,7 @@ The remaining required configuration is the verified `GOOGLE_HOSTED_DOMAIN` clai
 - Unauthenticated POST, PATCH, DELETE and invalid bearer-token upload returned 401. The asset hostname rejected listing and CRUD endpoints with 404.
 - A synthetic PDF and corresponding metadata row were temporarily seeded directly into the Lite R2 bucket and D1 table. The API returned the expected asset hostname and omitted the private owner identifier. The PDF route returned 200, `application/pdf`, and a valid PDF signature. The row, object and temporary build variable were subsequently removed; D1 contains zero rows, and R2 contains no matching test object. This was a storage-and-delivery test, not an authenticated upload/edit/delete test.
 - JavaScript syntax, local Wrangler build, local D1 initialization, local Worker response, catalog search, track/material filters, pagination and route serialization passed. Chromium navigation was blocked by the execution environment, so interactive UI and browser-console checks are not verified.
-- Google sign-in initialization, Workspace hosted-domain eligibility, authenticated CRUD, owner and administrator authorization with real accounts still require an interactive legitimate Google login. The configured hosted-domain placeholder deliberately prevents student uploads until confirmed.
+- Google sign-in initialization, Workspace hosted-domain eligibility, authenticated CRUD, owner and administrator authorization with real accounts still require an interactive legitimate Google login. The configured hosted domain is `std.aum.edu.jo`; actual token eligibility must still be verified with an interactive login.
 - The original 204-line Worker and existing visual identity were preserved. No non-Lite infrastructure was modified.
 
 ## Limitations and demonstration safety
