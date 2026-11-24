@@ -1,196 +1,171 @@
 # root/archive Lite
 
-An independent academic demonstration for an undergraduate Cloud Computing course. The original root/archive interface and complete course catalog are retained, but the production backend is replaced with one plain JavaScript Worker and one D1 table. The database starts empty. No production resources, accounts, credentials or submissions are included.
+A student-built academic resource-sharing application developed for our undergraduate Cloud Computing course. It is a simplified, independent version of root/archive, designed to demonstrate how cloud services work together in a real application.
 
-## Deployment targets
+**Live application:** https://archive-lite.rootamman.com
 
-- Website (Cloudflare Pages): https://archive-lite.rootamman.com
-- API (Cloudflare Worker custom domain): https://api-lite.rootamman.com
-- PDF delivery (same Worker, second custom domain): https://assets-lite.rootamman.com
-- Dedicated D1: `root-archive-lite-db`
-- Dedicated private R2: `root-archive-lite-files`
+The application is deployed. Team members do not need to create Cloudflare resources, configure Google OAuth, or deploy anything to use it.
 
-**Deployment status (24 November 2026): deployed.** Both Pages and the Worker build from `omatek/root-archive-lite` (`main`). All three custom domains are assigned, HTTPS requests to each passed, and the dedicated D1 and private R2 bindings are verified. The original archive is not involved. Public browsing and PDF delivery have passed live HTTP tests. The project owner confirmed the Workspace hosted domain as `std.aum.edu.jo`; real Google sign-in and authenticated CRUD remain to be tested.
+## 1. Using the application
 
-## Architecture
+Anyone can browse the 127-course catalog, search for courses, filter by major (Computer Science, Artificial Intelligence or Cybersecurity), and open shared PDFs without an account.
+
+Students sign in with their university Google account (`@std.aum.edu.jo`) to contribute resources. Open a course and upload a PDF with a title, category and optional semester and contributor name. The upload limit is 10 MiB.
+
+A signed-in contributor can edit their own resource's title, category and semester, or delete it. Administrators can edit and delete other contributors' resources. Uploading still requires an eligible student account.
+
+Use synthetic PDFs for the course demonstration. Do not upload confidential material or real student records; published resources are publicly accessible.
+
+## 2. Cloud architecture
 
 ```text
-Browser ── HTML/CSS/JS ── Cloudflare Pages
+                      Google Identity Services
+                              │
+                         Google ID token
+                              │
+Browser ─── Cloudflare Pages ─┘
+   │         HTML, CSS, JS, course catalog
    │
-   ├── Google Identity Services → Google ID token
-   │
-   └── HTTP requests + ID token for writes
-          │
-          ▼
-      Cloudflare Worker
-          ├── D1: resource metadata and ownership
-          └── R2: private PDF objects
+   ├── api-lite.rootamman.com ─────┐
+   │                               ▼
+   └── assets-lite.rootamman.com → Cloudflare Worker
+                                   ├── D1: metadata
+                                   └── R2: PDF files
 ```
 
-Pages serves the interface and courses.json. The Worker is the HTTP API and security boundary. D1 stores small searchable fields; R2 stores the actual PDF bytes. Google authenticates users, and the Worker verifies their credentials and authorizes actions. No custom login server, moderation portal or scheduled task is needed.
+| Service | Role in our application | Deployed resource |
+|---|---|---|
+| Cloudflare Pages | Static frontend hosting and delivery | `root-archive-lite` |
+| Cloudflare Workers | Serverless API, authentication and file delivery | `root-archive-lite` |
+| Cloudflare D1 | Managed SQL database for resource metadata | `root-archive-lite-db` |
+| Cloudflare R2 | Private object storage for PDFs | `root-archive-lite-files` |
+| Google Identity Services | User authentication through existing university accounts | Dedicated Lite OAuth client |
 
-## Project files
+The frontend runs in the browser, while the Worker runs on Cloudflare's infrastructure. We do not manage a virtual machine, operating system or persistent backend server.
 
-- `frontend/index.html`, `styles.css`, `assets/`: original design adapted for Lite.
-- `frontend/courses.json`: the original complete course catalog. The Worker imports this same file at build time.
-- `frontend/js/config.mjs`: API URL, Google client ID, resource categories and UI upload limit.
-- `frontend/js/catalog.mjs`, `app.mjs`: read API, directory, search, filters, resource display and navigation.
-- `frontend/js/contribution.mjs`: Google sign-in, upload, edit and delete form behavior.
-- `frontend/js/dom.mjs`: safe DOM creation helpers.
-- `backend/worker.js`: all API logic (204 physical lines, including comments and blank lines).
-- `backend/schema.sql`: one `resources` table.
-- `backend/wrangler.toml`: deployment bindings and settings.
-- `backend/package.json`: jose (runtime JWT verification) and Wrangler (development/deployment), pinned to the versions used in the verified build.
-- `backend/smoke-test.mjs`: live HTTP smoke tests, run after Worker deployments; not part of the 204-line runtime.
+D1 and R2 serve different purposes: SQL is suitable for structured metadata and queries, while object storage is suitable for files. Both are accessed through Worker bindings rather than database passwords or public bucket URLs.
 
-Keep `frontend` and `backend` next to each other: the Worker imports the course catalog and category list from the frontend. There is no frontend build step.
+### Live endpoints
 
-## Database
+- Frontend: https://archive-lite.rootamman.com
+- API listing: https://api-lite.rootamman.com/resources
+- PDF delivery: `https://assets-lite.rootamman.com/files/<file-key>`
+
+Both the API and asset domains use the **same Worker**. The asset hostname does not expose CRUD endpoints. R2 itself remains private. All three custom domains use HTTPS and the Lite infrastructure is separate from the original root/archive.
+
+## 3. Understanding the code
+
+| File | What to read it for |
+|---|---|
+| `frontend/index.html` | Page structure and interface |
+| `frontend/styles.css` | Visual design and responsive layout |
+| `frontend/courses.json` | Static catalog of 127 courses |
+| `frontend/js/config.mjs` | Shared resource categories, API URL and public Google client ID |
+| `frontend/js/catalog.mjs`, `app.mjs` | Catalog, search, filtering and resource display |
+| `frontend/js/contribution.mjs` | Sign-in and resource upload, edit and delete interactions |
+| `frontend/js/dom.mjs` | DOM helpers |
+| `backend/worker.js` | Complete backend: 204 lines of plain JavaScript, including comments and blank lines |
+| `backend/schema.sql` | Database table definition |
+| `backend/wrangler.toml` | Worker settings, domains and D1/R2 bindings |
+| `backend/package.json` | Dependencies: `jose` and Wrangler |
+| `backend/smoke-test.mjs` | Live HTTP integration tests |
+
+Start with `backend/worker.js` and `backend/schema.sql` to understand the cloud implementation. The frontend is static and has no build step. The Worker imports the same catalog and resource categories used by the frontend.
+
+### Database
+
+The single `resources` table contains eight fields:
 
 | Field | Purpose |
 |---|---|
-| id | Unique integer resource ID, generated by D1 |
-| course_id | Existing static course identifier |
-| title | Resource title |
-| type | Category |
-| semester | Optional semester/year |
-| contributor | Optional public display name or pseudonym |
-| owner_id | Verified Google subject (`sub`); private |
-| file_key | Unique R2 object key; generated by Worker |
+| `id` | Unique integer resource ID |
+| `course_id` | Reference to a course in the static catalog |
+| `title` | Resource title |
+| `type` | Resource category |
+| `semester` | Optional semester/year |
+| `contributor` | Optional public display name |
+| `owner_id` | Private, verified Google account identifier (`sub`) |
+| `file_key` | Unique key identifying the PDF in R2 |
 
-## API
+The course catalog is a static JSON file, not a database table. PDF contents are not stored in D1.
 
-| Method | Endpoint | Request / response | Permission |
-|---|---|---|---|
-| GET | `/resources` | `{resources: [...], user: null or {can_upload, admin}}`; each resource has `can_edit` | Public; optional bearer token for permissions |
-| POST | `/upload` | Multipart form: `course_id`, `title`, `type`, `semester`, `contributor`, `file`; returns `{id}` (201) | Eligible student |
-| GET | `/files/:key` | PDF response; only keys linked to D1 metadata | Public |
-| PATCH | `/resources/:id` | JSON containing one or more of `title`, `type`, `semester`; returns message | Owner or admin |
-| DELETE | `/resources/:id` | Returns message | Owner or admin |
+## 4. CRUD operations
 
-Protected requests send `Authorization: Bearer <Google ID token>`. Errors are JSON `{error: "..."}` with a meaningful HTTP status. The UI uses `can_edit` only for convenience; it never grants authorization. The backend checks each write independently. SQL uses placeholders and `.bind()`.
+| Operation | HTTP endpoint | What happens |
+|---|---|---|
+| Create | `POST /upload` | Validate the student and PDF, store the file in R2 and insert metadata into D1 |
+| Read | `GET /resources` | Retrieve public resource metadata from D1 |
+| Read PDF | `GET /files/:key` | Check the D1 reference, retrieve the R2 object and return the PDF |
+| Update | `PATCH /resources/:id` | Verify ownership or admin rights and update metadata in D1 |
+| Delete | `DELETE /resources/:id` | Verify ownership or admin rights, delete the R2 object, then delete its D1 row |
 
-## 1. Set up Google Identity Services
+The upload handler attempts to remove the new PDF if inserting metadata fails. Updates do not replace the file or change ownership. D1 and R2 are separate services, so deletion across both is not a single atomic transaction; a partial failure may require a retry.
 
-The separate academic OAuth client is already configured consistently in the frontend and Worker. Do not create a replacement or use the production client. For reference, the original setup procedure is:
+## 5. Authentication and authorization
 
-1. In Google Cloud Console, select or create a separate project. Configure Google Auth Platform branding, audience, and any required test users. If you control a Workspace organization, an Internal audience may be appropriate; otherwise use External with the applicable testing configuration.
-2. Create an OAuth client of type **Web application**. Add `http://localhost` and `http://localhost:8000` to Authorized JavaScript origins for local development. For deployment, add `https://archive-lite.rootamman.com` as an Authorized JavaScript origin. Neither the API nor the assets hostname is a browser sign-in origin. No redirect URI is needed for this popup/callback flow.
-3. Copy the client ID to `frontend/js/config.mjs` (`googleClientId`) and `backend/wrangler.toml` (`GOOGLE_CLIENT_ID`). Never put an OAuth client secret in frontend code; this flow does not need one.
-4. Set `GOOGLE_HOSTED_DOMAIN` in `wrangler.toml` to the **actual** AUM Google Workspace hosted-domain claim. Confirm it through the university or inspect a token obtained through your own legitimate login locally. Do not upload tokens to third-party decoders. A student email suffix does not necessarily equal the Workspace `hd` claim. The deployed configuration uses `std.aum.edu.jo`, confirmed by the project owner.
-5. `ADMIN_EMAILS` is already configured as a private Worker secret, rather than committing the administrator address to the public repository. To update it, use the Lite Worker's Variables and Secrets settings or `npx wrangler secret put ADMIN_EMAILS` from `backend/`. `keep_vars = true` preserves dashboard variables across deploys. Administrators may edit/delete every resource, but may only upload if they are also eligible students. Set `DEMO_EMAILS` to the approved team/professor addresses if you want to restrict all writes to those accounts. Administrators must also be included when that list is nonempty.
+Google handles sign-in and issues an ID token. The browser sends that token as an HTTP Bearer credential for protected requests.
 
-Google's documented GIS verification guidance: https://developers.google.com/identity/gsi/web/guides/verify-google-id-token
+The Worker uses `jose` to verify the token's signature against Google's public keys, issuer, audience and expiration. Student eligibility requires a verified email in `std.aum.edu.jo` and the corresponding Google Workspace hosted-domain claim. The Google `sub` claim identifies the owner, independently of their public display name.
 
-## 2. Existing isolated Cloudflare resources
+The Worker enforces permissions on every write request. Hiding edit/delete buttons in the interface is not itself a security control. The administrator list is stored as a private Worker secret, not in GitHub. SQL queries use parameter binding.
 
-The dedicated resources have already been provisioned and the remote schema applied. **Do not recreate them.**
+## 6. Classroom demonstration
 
-| Resource | Name / identifier |
+Use the live website rather than creating another deployment.
+
+1. Open the website while signed out and demonstrate course search and filtering.
+2. Sign in with your university Google account.
+3. Choose a course and upload a small, non-confidential sample PDF.
+4. Open the uploaded resource and point out its asset delivery hostname.
+5. Edit the resource title or category, showing that the PDF remains unchanged.
+6. If a second student is available, demonstrate that they cannot edit or delete the first student's resource.
+7. Delete the test resource and confirm that it disappears.
+
+A team member with authorized Cloudflare dashboard access can additionally show the Pages deployment, Worker domains and bindings, D1 metadata row, and R2 object before and after deletion.
+
+### Questions to prepare for
+
+| Question | Answer |
 |---|---|
-| Pages project | `root-archive-lite` |
-| Worker | `root-archive-lite` |
-| D1 database | `root-archive-lite-db` |
-| D1 database ID | `6da50390-2a11-4486-a8a1-86513b44e372` |
-| Private R2 bucket | `root-archive-lite-files` |
+| Why use a Worker instead of a traditional server? | It executes API requests on managed cloud infrastructure without managing a server. |
+| Why use both D1 and R2? | Metadata needs structured SQL queries; PDFs belong in object storage. |
+| Why is the bucket private if PDFs are public? | The Worker controls delivery and checks that a corresponding resource record exists. |
+| Who can modify a resource? | Its verified owner or a configured administrator. |
+| What happens when a resource is deleted? | Its PDF is removed from R2 and its metadata row from D1. |
+| What happens if the database insertion fails? | The upload handler attempts to remove the newly stored PDF. |
+| How does the website scale? | Pages and Workers use managed infrastructure, subject to the limits of each cloud service. |
+| What makes this different from the original archive? | Lite deliberately omits moderation, revision history, automated cleanup and other production features. |
 
-The two bindings in `backend/wrangler.toml` already reference the correct resources. Public R2 access (both `r2.dev` and bucket custom domains) is disabled. The Worker delivers PDFs. The three Lite custom domains are configured; no production/staging resources were changed.
+## 7. Team workflow
 
-Install Node.js 22+ and dependencies (`cd backend && npm install`) if developing locally.
-
-## 3. Run locally
-
-From `backend/`, initialize the local D1 database and run the Worker:
-
-```bash
-npx wrangler d1 execute root-archive-lite-db --local --file=./schema.sql
-npm run dev
-```
-
-The Worker normally listens on `http://localhost:8787`. In a second terminal, from the extracted project root, run:
+The GitHub repository is the source of truth. Team members can clone it or pull the latest version:
 
 ```bash
-python3 -m http.server 8000 --directory frontend
+git clone https://github.com/omatek/root-archive-lite.git
+# If you already have a clone:
+git pull origin main
 ```
 
-Visit `http://localhost:8000`. The frontend automatically selects the local API only at `http://localhost:8000`; `npm run dev` overrides the Worker CORS origin and PDF delivery origin for local testing only. No changes to the deployed URLs are necessary. Use localhost consistently, not a mix of `127.0.0.1` and `localhost`. If ports change, update the local-origin check in `config.mjs` and the dev script in `package.json` accordingly. Local D1 and R2 state is separate from deployed state. Google sign-in requires network access and the configured OAuth client even in local mode. Run `npm run check` to check Worker syntax.
+Pages and the Worker are already connected to GitHub. Relevant changes merged into `main` trigger automatic deployments, so coordinate changes with the team before pushing to that branch. Use a separate branch for experiments. Never commit credentials or modify the original archive's infrastructure.
 
-## 4. Existing Cloudflare deployment — Git-based updates
+For code changes, the following files are the usual starting points:
 
-Both the Pages project and Worker are already connected to `omatek/root-archive-lite`, branch `main`. Push updates to that repository rather than creating another project.
-
-- Pages: repository root `/`, no build command, output directory `frontend`. Custom domain: `archive-lite.rootamman.com`.
-- Workers Builds: root directory `backend`, build command `npm install --no-audit --no-fund`, deploy command `npx wrangler deploy && node smoke-test.mjs`.
-- Wrangler registers `api-lite.rootamman.com` and `assets-lite.rootamman.com` as custom domains of the same Worker. `workers.dev` and Worker preview URLs are disabled.
-- The backend imports the catalog and category definitions from the frontend, so changes to these shared files need both deployments.
-- For manual Worker deployments from a network-enabled terminal, run `npm install` and `npx wrangler deploy` from `backend/` after authenticating Wrangler to the correct account. Do not create another Pages project or attempt a direct upload into the connected Git project.
-
-The D1 schema is already initialized. `npx wrangler d1 execute root-archive-lite-db --remote --file=./schema.sql` is idempotent, but not needed for routine deployment. Do not target any production resources.
-
-Verify live guest functionality with:
-
-```bash
-cd backend
-node smoke-test.mjs
-```
-
-The optional `LITE_TEST_ASSET_KEY` environment variable checks an explicitly seeded synthetic PDF fixture; do not set it for routine deployments. The temporary fixture used during deployment was removed from both D1 and R2.
-
-The `GOOGLE_HOSTED_DOMAIN` is configured as `std.aum.edu.jo`, confirmed by the project owner. Test sign-in and authenticated CRUD. Verify the existing OAuth client's Authorized JavaScript origins includes `https://archive-lite.rootamman.com`.
-
-## Backend walkthrough for the professor
-
-**Routing.** `fetch()` receives an HTTP request, calls `route()`, and applies CORS. `route()` checks the request method and path and calls the matching handler. There is no framework.
-
-**Authentication.** `authenticate()` extracts the bearer token. The `jose` library verifies its RS256 signature against Google's public signing keys, issuer, intended client ID (audience), and expiration. Required identity claims are checked. Verified email suffix and actual Workspace hosted domain determine student eligibility. The configured admin list determines administrator privileges. `sub`, not an editable name or email from a form, identifies the owner.
-
-**Create.** `upload()` verifies the user, checks the course and fields, validates PDF type, size and `%PDF-` signature, generates a random object key, saves the PDF to R2, and inserts its metadata into D1. If insertion throws, the Worker attempts to remove the just-uploaded file. The PDF becomes available when its database row exists.
-
-**Read.** `listResources()` selects rows in descending ID order and returns only public fields plus an authorization flag computed for the current verified user. `getFile()` checks that the key is present in D1, retrieves the object from R2 and sends it to the browser with PDF headers. The private bucket is never exposed directly. The public resource URL uses `ASSET_ORIGIN` (assets-lite.rootamman.com in deployment). Both hostnames point to the same Worker, and only PDF retrieval is available on the deployed assets hostname. The API hostname retains `/files/:key` for compatibility. Course search and grouping happen in browser JavaScript.
-
-**Update.** `modifyResource()` fetches the database row by ID, checks `canEdit()`, validates the new metadata and executes a parameterized SQL UPDATE. It does not touch the PDF or the ownership fields. Unknown JSON fields do not get written to the database.
-
-**Delete.** The same authorization check applies. R2 is deleted first, then the D1 row. If R2 fails, the database row is retained. If the D1 deletion fails after R2 succeeds, the API reports a partial failure, and the user can retry (R2 deletion is safe to repeat). In that temporary state, the listed resource may have a missing PDF. D1 and R2 have separate transaction boundaries, so the operation cannot be atomic across both services. No hidden recovery system is implemented.
-
-## Live modification guide
-
-| Professor asks… | Change |
+| Change | Location |
 |---|---|
-| Increase the upload size | `MAX_FILE_MB` in `backend/wrangler.toml` and `maxFileSize` in `frontend/js/config.mjs` (MiB × 1024 × 1024) |
-| Change the student email domain | `STUDENT_EMAIL_DOMAIN` and corresponding verified `GOOGLE_HOSTED_DOMAIN` in Wrangler config |
-| Add an administrator | Update the Lite Worker secret `ADMIN_EMAILS` with the Google-managed address (and `DEMO_EMAILS` if used) |
-| Change allowed resource categories | Update `TYPES` and `TYPE_HEADINGS` in `frontend/js/config.mjs`; the Worker imports `TYPES` from the same file |
-| Change editable fields | Modify `metadata()`, `modifyResource()`'s SQL UPDATE and the frontend form/PATCH payload. Add a schema migration only if introducing a new column |
-| Change order | Change `ORDER BY id DESC` in `listResources()`; the frontend retains server order inside each category |
-| Add a course | Add an object with unique string `id`, `name`, and valid `tracks` to `frontend/courses.json`; redeploy both Pages and Worker |
-| Remove a resource | Use Delete in the course page while signed in as owner/admin; `modifyResource()` removes both the PDF and row |
+| Appearance | `frontend/styles.css` |
+| Course catalog | `frontend/courses.json` |
+| Resource categories | `frontend/js/config.mjs` |
+| Upload limit | `frontend/js/config.mjs` and `backend/wrangler.toml` |
+| API behavior | `backend/worker.js` |
 
-## Functional testing checklist (after configuration)
+Changes to the shared catalog and categories require both frontend and Worker deployment. Automated smoke tests run after Worker deployments and can also be run manually from `backend/` using `node smoke-test.mjs` (Node.js 22+).
 
-- [ ] Guest can browse all courses, search/filter, open course pages and open PDFs; no edit/delete buttons.
-- [ ] Eligible account signs in via Google; wrong email domain or hosted domain cannot upload.
-- [ ] Upload a small synthetic PDF; it immediately appears on the selected course page.
-- [ ] Confirm one D1 row and one R2 object; `owner_id` does not appear in public API JSON.
-- [ ] Reject invalid course, resource type, missing/oversized/non-PDF file, invalid/expired ID token.
-- [ ] Owner edits title, type and semester; PDF/key remains unchanged.
-- [ ] A second eligible account cannot edit/delete the first account's resource, including through direct API requests.
-- [ ] Admin can edit/delete others' resources; guest cannot perform writes.
-- [ ] Delete a resource; D1 row and R2 object disappear, old file URL returns 404.
-- [ ] Verify exact-origin CORS, token expiration/re-login and mobile layout.
+## 8. Validation and scope
 
-## Deployment validation — 24 November 2026
+The deployed infrastructure and public functionality were verified on 24 November 2026: HTTPS, the 127-course catalog, public resource listing, exact-origin CORS, rejection of unauthenticated writes and invalid tokens, and rejection of CRUD requests on the asset hostname. A synthetic PDF was temporarily inserted directly into R2 and D1, served successfully through the Worker, and removed from both services.
 
-- Cloudflare Pages production deployment succeeded (`beaf1dee-037d-418a-8400-81b804db163d`), and the frontend domain was marked active.
-- Workers Builds deployment and live smoke tests succeeded (`54c2b5bb-baab-437b-8bfd-e796a683c809`; Worker version `3bba4b77-1a79-4473-910c-9cf51b9795ef`).
-- Actual HTTPS requests: frontend and course catalog returned 200; catalog contains 127 courses; API listing returned 200; exact-origin CORS and preflight (204) passed; untrusted origins received no matching allow-origin header.
-- Unauthenticated POST, PATCH, DELETE and invalid bearer-token upload returned 401. The asset hostname rejected listing and CRUD endpoints with 404.
-- A synthetic PDF and corresponding metadata row were temporarily seeded directly into the Lite R2 bucket and D1 table. The API returned the expected asset hostname and omitted the private owner identifier. The PDF route returned 200, `application/pdf`, and a valid PDF signature. The row, object and temporary build variable were subsequently removed; D1 contains zero rows, and R2 contains no matching test object. This was a storage-and-delivery test, not an authenticated upload/edit/delete test.
-- JavaScript syntax, local Wrangler build, local D1 initialization, local Worker response, catalog search, track/material filters, pagination and route serialization passed. Chromium navigation was blocked by the execution environment, so interactive UI and browser-console checks are not verified.
-- Google sign-in initialization, Workspace hosted-domain eligibility, authenticated CRUD, owner and administrator authorization with real accounts still require an interactive legitimate Google login. The configured hosted domain is `std.aum.edu.jo`; actual token eligibility must still be verified with an interactive login.
-- The original 204-line Worker and existing visual identity were preserved. No non-Lite infrastructure was modified.
+Real Google sign-in, authenticated CRUD, ownership/admin enforcement with real accounts and interactive browser behavior still require team testing. The demonstration above is the acceptance checklist, not a claim that those tests have already passed.
 
-## Limitations and demonstration safety
+Lite is an academic demonstration, not a production-grade platform. There is no moderation, malware scanning, rate limiting, bot protection or automated cleanup. The PDF signature check is not malware detection. Public reads are intentional; remove demonstration content after assessment.
 
-This is intentionally not a production application. Public read access is by design; do not publish actual student records or private course content. `DEMO_EMAILS` can limit writes to project members and professor but does not make reads private. For a wholly private demo, run on a local machine and present from that machine, or use an institution-approved access gateway covering both the Pages and Worker origins (including direct API access); no gateway is implemented here. Do not treat CORS as access control. A professor with a non-student account may be made an admin to edit/delete, but cannot upload unless eligible.
-
-There is no moderation, malware scanning, rate limiting, bot protection, revision history, automated cleanup, paging of resource API results, or custom account/session system. PDF signature checking is not malware detection. Uploads are buffered after multipart parsing; the file limit is not an end-to-end streaming request-size limiter. No reliable atomic transaction spans D1/R2; unexpected outages or concurrent writes can produce temporary inconsistency, and an orphan file may require manual removal. If an insert outcome is ambiguous during a network failure, inspect D1/R2 before cleanup. ID tokens live in memory only and expire; sign in again after expiry/reload. Google authentication and authenticated CRUD need live testing before classroom use. Remove demo content after assessment.
+The deployment is isolated from root/archive production and staging infrastructure.
