@@ -1,0 +1,8 @@
+{
+  "name": "root-archive-lite-backend",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "wrangler dev --local --var ALLOWED_ORIGIN:http://localhost:8000", "deploy": "wrangler deploy", "check": "node --check worker.js" },
+  "dependencies": { "jose": "^6.1.0" },
+  "devDependencies": { "wrangler": "^4.0.0" }
+}

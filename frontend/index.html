@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Find your course. Share what helped you learn. An open resource archive built by students.">
+  <meta name="theme-color" content="#262229">
+  <title>root/archive Lite — Cloud Computing project</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="./assets/fonts/barlow-semi-condensed-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="./assets/fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./styles.css?v=ux-2">
+  <script type="module" src="./js/app.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="masthead">
+    <div class="shell masthead-inner">
+      <a class="wordmark" href="./" data-nav data-directory aria-label="root/archive home">
+        <span class="wordmark-root">root</span><span class="wordmark-slash" aria-hidden="true">/</span><span class="wordmark-product">archive</span><span class="lite-label">Lite</span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="?view=about" data-nav data-about>About root</a>
+        <button class="button button-light" type="button" data-contribute>Contribute <svg class="arrow-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.5"/></svg></button>
+      </nav>
+    </div>
+  </header>
+  <main id="main-content" class="shell" tabindex="-1">
+    <section id="directory-view" aria-labelledby="directory-heading">
+      <div class="intro">
+        <div>
+          <h1 id="directory-heading">Course directory</h1>
+          <p>Find your course. Share what helped you learn.</p>
+        </div>
+        <div class="publisher-note"><strong>Open to everyone.</strong>Academic demonstration · Cloud Computing project.</div>
+      </div>
+      <div class="search-wrap" role="search">
+        <label class="sr-only" for="course-search">Search by course name, code or resource title</label>
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 5 5"/></svg>
+          <input id="course-search" type="search" autocomplete="off" spellcheck="false" placeholder="Search by course name or code">
+          <button id="clear-search" type="button" hidden>Clear</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <div class="track-filters" role="group" aria-label="Filter courses by academic track">
+          <button type="button" data-track="All" aria-pressed="true">All tracks</button>
+          <button type="button" data-track="CS" aria-pressed="false">Computer Science</button>
+          <button type="button" data-track="AI" aria-pressed="false">AI</button>
+          <button type="button" data-track="Cybersecurity" aria-pressed="false">Cybersecurity</button>
+        </div>
+        <p id="result-count" class="result-count" role="status">Loading courses…</p>
+      </div>
+      <label class="materials-filter" for="has-materials"><input id="has-materials" type="checkbox" aria-controls="directory-results">Only courses with materials</label>
+      <div id="catalog-note" class="catalog-note" hidden>
+        <p id="catalog-availability"></p>
+        <button type="button" data-contribute>Help build the collection <svg class="arrow-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.5"/></svg></button>
+      </div>
+      <h2 id="directory-results-heading" class="sr-only">Course results</h2>
+      <div id="directory-results"></div>
+      <nav id="directory-pagination" class="directory-pagination" aria-label="Course directory pages" hidden></nav>
+    </section>
+    <section id="course-view" hidden></section>
+    <section id="about-view" class="reading-column" hidden aria-labelledby="about-heading">
+      <a class="back-link" href="./" data-return>← Course directory</a>
+      <div class="about-heading">
+        <img class="parent-mark" src="./assets/brand/root.svg" width="112" height="80" alt="">
+        <div><p class="eyebrow">The community behind the archive</p><h1 id="about-heading">About root</h1></div>
+      </div>
+      <div class="about-copy">
+        <p>root is an independent, student-led engineering and IT community in Jordan. We bring curious people together to learn by doing, build real projects, share knowledge, and explore things beyond the classroom.</p>
+        <p>Through collaborative projects, workshops, experimentation, and competitions, we make room to try things out and learn from each other.</p>
+        <h2>A little less starting from scratch.</h2>
+        <p>root/archive Lite is a separate academic demonstration of a student resource archive, covering Computer Science, Artificial Intelligence, and Cybersecurity at AUM. It uses independent cloud infrastructure and does not contain production submissions.</p>
+        <p>Anyone can browse and download. Eligible students can contribute PDF resources, which appear immediately. Contributors can edit or remove their own resources.</p>
+        <h2>Built by a community.</h2>
+        <p>Original student-authored notes, summaries, explanations, and original practice questions and test banks can make a difference. Share only material you have the right to share. Past examination papers are excluded.</p>
+        <p>root is an independent, student-led technology community based in Jordan. Neither root nor root/archive is operated, sponsored, or officially affiliated with AUM or another educational institution.</p>
+        <p>Use only synthetic or permitted materials for this classroom demonstration. Do not upload personal information.</p>
+        <button class="button" type="button" data-contribute>Contribute a resource <svg class="arrow-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.5"/></svg></button>
+      </div>
+    </section>
+    <section id="load-state" class="notice" role="status"><p>Loading the course directory…</p></section>
+    <section id="load-error" class="notice" hidden role="alert">
+      <h2>We couldn’t load the archive.</h2><p>Please check your connection and try again.</p>
+      <button id="retry-load" class="button" type="button">Try again</button>
+    </section>
+    <noscript><div class="notice">JavaScript is needed to browse published resources, search the directory and contribute. You can still read the <a href="./courses.json">course catalog</a>.</div></noscript>
+  </main>
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <div class="footer-signature"><img src="./assets/brand/archive.svg" width="47" height="34" alt=""><div><strong>root/archive Lite · Academic edition</strong><br>Independent. Student-built. Not an official university service.</div></div>
+      <nav class="footer-links" aria-label="Footer"><a href="?view=about" data-nav data-about>About root</a><a href="./policies/demo-notice.html">Demo notice</a></nav>
+    </div>
+  </footer>
+  <dialog id="contribution-dialog" aria-labelledby="contribution-heading">
+    <div class="dialog-header">
+      <div><h2 id="contribution-heading" tabindex="-1">Contribute a resource</h2><p id="contribution-description">Share a PDF. It will appear immediately.</p></div>
+      <button id="close-contribution" class="close-button" type="button" aria-label="Close dialog">×</button>
+    </div>
+    <div class="dialog-content">
+      <section class="auth-box" aria-labelledby="auth-heading">
+        <h3 id="auth-heading">Sign in with Google.</h3>
+        <p>Browsing needs no account. Uploading requires an eligible student account.</p>
+        <p>Read the <a href="./policies/demo-notice.html" target="_blank" rel="noopener">demo notice</a> before signing in.</p>
+        <div class="auth-actions">
+          <div id="google-signin-slot"></div>
+          <button id="retry-signin" class="button button-secondary" type="button">Load Google sign-in</button>
+          <button id="signout" class="text-button" type="button" hidden>Sign out</button>
+        </div>
+        <p id="auth-status" role="status">Not signed in.</p>
+      </section>
+      <form id="contribution-form">
+        <fieldset id="contribution-fields">
+          <legend class="sr-only">Resource details</legend>
+          <div class="field" id="course-field">
+            <label for="contribution-course">Course</label>
+            <input id="course-picker-search" type="search" placeholder="Find by name or code" aria-label="Find a course">
+            <select id="contribution-course" name="course_id" required></select>
+          </div>
+          <div class="field">
+            <label for="contribution-title">Resource title</label>
+            <input type="text" id="contribution-title" name="title" minlength="3" maxlength="120" required placeholder="e.g. Midterm revision summary">
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label for="contribution-type">Resource type</label>
+              <select id="contribution-type" name="type" required></select>
+            </div>
+            <div class="field">
+              <label for="contribution-semester">Semester or year (optional)</label>
+              <input type="text" id="contribution-semester" name="semester" maxlength="20" placeholder="e.g. Fall 2026">
+            </div>
+          </div>
+          <div class="field" id="file-field">
+            <label for="contribution-file">PDF file</label>
+            <div class="file-box"><input id="contribution-file" name="file" type="file" accept=".pdf,application/pdf" required><p id="file-help" class="field-help"></p></div>
+          </div>
+          <div class="field" id="contributor-field">
+            <label for="contribution-contributor">Public contributor name (optional)</label>
+            <input type="text" id="contribution-contributor" name="contributor" maxlength="40" autocomplete="off">
+            <p class="field-help">Use a pseudonym or leave blank for anonymous credit.</p>
+          </div>
+        </fieldset>
+        <p id="submission-message" class="form-status" role="status" hidden></p>
+        <p class="field-help">Use only materials you have permission to share. Do not include personal information.</p>
+        <div class="form-actions">
+          <button id="submit-resource" class="button" type="submit" disabled>Upload resource</button>
+          <button id="save-close" class="text-button" type="button">Close</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+</body>
+</html>
