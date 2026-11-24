@@ -18,8 +18,8 @@ ASSET_ORIGIN = "https://assets-lite.rootamman.com"
 ALLOWED_ORIGIN = "https://archive-lite.rootamman.com"
 GOOGLE_CLIENT_ID = "451085424306-tll56iseq0qd9lcofeb1nkiqiaq0opvh.apps.googleusercontent.com"
 STUDENT_EMAIL_DOMAIN = "std.aum.edu.jo"
-# Confirm actual Google Workspace hd value with the university before enabling uploads.
-GOOGLE_HOSTED_DOMAIN = "REPLACE_WITH_ACTUAL_WORKSPACE_DOMAIN"
+# University Google Workspace hosted domain, confirmed by project owner.
+GOOGLE_HOSTED_DOMAIN = "std.aum.edu.jo"
 # ADMIN_EMAILS is configured as a Worker secret, not stored in this public repository.
 # Optional comma-separated allowlist; applies to all writes, including admin writes.
 DEMO_EMAILS = ""
