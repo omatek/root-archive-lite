@@ -4,7 +4,7 @@ export const CONFIG = {
   apiUrl: typeof window !== 'undefined' && window.location.origin === 'http://localhost:8000'
     ? 'http://localhost:8787'
     : 'https://api-lite.rootamman.com',
-  googleClientId: 'REPLACE_WITH_LITE_CLIENT_ID.apps.googleusercontent.com',
+  googleClientId: '451085424306-tll56iseq0qd9lcofeb1nkiqiaq0opvh.apps.googleusercontent.com',
   maxFileSize: 10 * 1024 * 1024
 };
 
