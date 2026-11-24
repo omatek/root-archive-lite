@@ -6,6 +6,7 @@ An independent academic demonstration for an undergraduate Cloud Computing cours
 
 - Website (Cloudflare Pages): https://archive-lite.rootamman.com
 - API (Cloudflare Worker custom domain): https://api-lite.rootamman.com
+- PDF delivery (same Worker, second custom domain): https://assets-lite.rootamman.com
 - Dedicated D1: `root-archive-lite-db`
 - Dedicated private R2: `root-archive-lite-files`
 
@@ -36,7 +37,7 @@ Pages serves the interface and courses.json. The Worker is the HTTP API and secu
 - `frontend/js/catalog.mjs`, `app.mjs`: read API, directory, search, filters, resource display and navigation.
 - `frontend/js/contribution.mjs`: Google sign-in, upload, edit and delete form behavior.
 - `frontend/js/dom.mjs`: safe DOM creation helpers.
-- `backend/worker.js`: all API logic (199 physical lines, including comments and blank lines).
+- `backend/worker.js`: all API logic (204 physical lines, including comments and blank lines).
 - `backend/schema.sql`: one `resources` table.
 - `backend/wrangler.toml`: deployment bindings and settings.
 - `backend/package.json`: jose (runtime JWT verification) and Wrangler (development/deployment).
@@ -73,7 +74,7 @@ Protected requests send `Authorization: Bearer <Google ID token>`. Errors are JS
 Create a **new academic Google OAuth client**, not the production client:
 
 1. In Google Cloud Console, select or create a separate project. Configure Google Auth Platform branding, audience, and any required test users. If you control a Workspace organization, an Internal audience may be appropriate; otherwise use External with the applicable testing configuration.
-2. Create an OAuth client of type **Web application**. Add `http://localhost` and `http://localhost:8000` to Authorized JavaScript origins for local development. For deployment, add `https://archive-lite.rootamman.com` as an Authorized JavaScript origin. The API hostname is not a browser sign-in origin. No redirect URI is needed for this popup/callback flow.
+2. Create an OAuth client of type **Web application**. Add `http://localhost` and `http://localhost:8000` to Authorized JavaScript origins for local development. For deployment, add `https://archive-lite.rootamman.com` as an Authorized JavaScript origin. Neither the API nor the assets hostname is a browser sign-in origin. No redirect URI is needed for this popup/callback flow.
 3. Copy the client ID to `frontend/js/config.mjs` (`googleClientId`) and `backend/wrangler.toml` (`GOOGLE_CLIENT_ID`). Never put an OAuth client secret in frontend code; this flow does not need one.
 4. Set `GOOGLE_HOSTED_DOMAIN` in `wrangler.toml` to the **actual** AUM Google Workspace hosted-domain claim. Confirm it through the university or inspect a token obtained through your own legitimate login locally. Do not upload tokens to third-party decoders. A student email suffix does not necessarily equal the Workspace `hd` claim. The placeholder deliberately rejects student uploads until configured.
 5. Optionally set `ADMIN_EMAILS` to a comma-separated list of verified Google-managed addresses, e.g. your own Gmail or an appropriate Workspace account. Administrators may edit/delete every resource, but may only upload if they are also eligible students. Set `DEMO_EMAILS` to the approved team/professor addresses if you want to restrict all writes to those accounts. Administrators must also be included when that list is nonempty.
@@ -109,13 +110,13 @@ The Worker normally listens on `http://localhost:8787`. In a second terminal, fr
 python3 -m http.server 8000 --directory frontend
 ```
 
-Visit `http://localhost:8000`. The frontend automatically selects the local API only at `http://localhost:8000`; `npm run dev` overrides the Worker CORS origin for local testing only. No changes to the deployed URLs are necessary. Use localhost consistently, not a mix of `127.0.0.1` and `localhost`. If ports change, update the local-origin check in `config.mjs` and the dev script in `package.json` accordingly. Local D1 and R2 state is separate from deployed state. Google sign-in requires network access and the configured OAuth client even in local mode. Run `npm run check` to check Worker syntax.
+Visit `http://localhost:8000`. The frontend automatically selects the local API only at `http://localhost:8000`; `npm run dev` overrides the Worker CORS origin and PDF delivery origin for local testing only. No changes to the deployed URLs are necessary. Use localhost consistently, not a mix of `127.0.0.1` and `localhost`. If ports change, update the local-origin check in `config.mjs` and the dev script in `package.json` accordingly. Local D1 and R2 state is separate from deployed state. Google sign-in requires network access and the configured OAuth client even in local mode. Run `npm run check` to check Worker syntax.
 
 ## 4. Deploy to Cloudflare — custom domains
 
-Before deploying, confirm the `rootamman.com` zone is in the Cloudflare account used by Wrangler and that `archive-lite.rootamman.com` and `api-lite.rootamman.com` are not already assigned to another project or DNS record. Do not remove or replace any existing records without verifying ownership. The production archive's hostnames and resources must remain untouched.
+Before deploying, confirm the `rootamman.com` zone is in the Cloudflare account used by Wrangler and that `archive-lite.rootamman.com`, `api-lite.rootamman.com` and `assets-lite.rootamman.com` are not already assigned to another project or DNS record. Do not remove or replace any existing records without verifying ownership. The production archive's hostnames and resources must remain untouched.
 
-1. Complete sections 1 and 2: set the dedicated D1 UUID, Google client ID in both files, actual Workspace hosted domain and any admin/demo allowlists. The deployed CORS origin and frontend API URL are already set to the intended hostnames.
+1. Complete sections 1 and 2: set the dedicated D1 UUID, Google client ID in both files, actual Workspace hosted domain and any admin/demo allowlists. The deployed CORS origin, asset origin and frontend API URL are already set to the intended hostnames.
 2. From `backend/`, initialize the remote Lite database and deploy the Worker:
 
    ```bash
@@ -123,13 +124,13 @@ Before deploying, confirm the `rootamman.com` zone is in the Cloudflare account 
    npx wrangler deploy
    ```
 
-   Wrangler's `[[routes]]` entry registers `api-lite.rootamman.com` as a Worker Custom Domain. Cloudflare manages its DNS record and TLS certificate. `workers_dev` and `preview_urls` are disabled in configuration. Wait for the custom domain to become active, then test:
+   Wrangler's two `[[routes]]` entries register `api-lite.rootamman.com` and `assets-lite.rootamman.com` as Custom Domains on the same Worker. Cloudflare manages its DNS record and TLS certificate. `workers_dev` and `preview_urls` are disabled in configuration. Wait for both custom domains to become active, then test:
 
    ```bash
    curl -i -H 'Origin: https://archive-lite.rootamman.com' https://api-lite.rootamman.com/resources
    ```
 
-   Expect HTTP 200, a JSON resource list (initially empty), and `Access-Control-Allow-Origin: https://archive-lite.rootamman.com`.
+   Expect HTTP 200, a JSON resource list (initially empty), and `Access-Control-Allow-Origin: https://archive-lite.rootamman.com`. Also run `curl -i https://assets-lite.rootamman.com/resources` (expect 404). After uploading a synthetic PDF, confirm its returned `asset_url` uses `https://assets-lite.rootamman.com/files/` and opens successfully.
 3. Create and deploy the dedicated Pages project from `backend/`:
 
    ```bash
@@ -156,7 +157,7 @@ References:
 
 **Create.** `upload()` verifies the user, checks the course and fields, validates PDF type, size and `%PDF-` signature, generates a random object key, saves the PDF to R2, and inserts its metadata into D1. If insertion throws, the Worker attempts to remove the just-uploaded file. The PDF becomes available when its database row exists.
 
-**Read.** `listResources()` selects rows in descending ID order and returns only public fields plus an authorization flag computed for the current verified user. `getFile()` checks that the key is present in D1, retrieves the object from R2 and sends it to the browser with PDF headers. The private bucket is never exposed directly. Course search and grouping happen in browser JavaScript.
+**Read.** `listResources()` selects rows in descending ID order and returns only public fields plus an authorization flag computed for the current verified user. `getFile()` checks that the key is present in D1, retrieves the object from R2 and sends it to the browser with PDF headers. The private bucket is never exposed directly. The public resource URL uses `ASSET_ORIGIN` (assets-lite.rootamman.com in deployment). Both hostnames point to the same Worker, and only PDF retrieval is available on the deployed assets hostname. The API hostname retains `/files/:key` for compatibility. Course search and grouping happen in browser JavaScript.
 
 **Update.** `modifyResource()` fetches the database row by ID, checks `canEdit()`, validates the new metadata and executes a parameterized SQL UPDATE. It does not touch the PDF or the ownership fields. Unknown JSON fields do not get written to the database.
 
@@ -191,7 +192,7 @@ References:
 ## Validation performed in the implementation environment
 
 - Node syntax checks for all frontend modules and Worker passed.
-- Fourteen simulated backend check groups passed using Node's real in-memory SQLite with a D1-shaped adapter, in-memory R2 adapter and a test-only mock of Google token verification. Tested CRUD, authorization, CORS, PDF checks, failure compensation, deletion retry and allowlist. The deployed Worker does not contain the mock.
+- Before the asset-hostname change, fourteen simulated backend check groups passed using Node's real in-memory SQLite with a D1-shaped adapter, in-memory R2 adapter and a test-only mock of Google token verification. Tested CRUD, authorization, CORS, PDF checks, failure compensation, deletion retry and allowlist. The deployed Worker does not contain the mock.
 - The original course catalog was preserved byte-for-byte. Static paths and production references were checked.
 - npm registry access failed; jose and Wrangler could not be installed here. No real JWT signature verification, Wrangler bundling, Cloudflare D1/R2 execution, or live deployment was performed. The actual hosted-domain setting must be confirmed.
 - A Chromium UI test was attempted but local browser navigation was blocked by the environment. Use the functional checklist above to validate actual UI behavior.

@@ -90,7 +90,7 @@ async function listResources(request, env) {
     type: row.type,
     semester: row.semester,
     contributor: row.contributor,
-    asset_url: new URL('/files/' + row.file_key, request.url).href,
+    asset_url: new URL('/files/' + row.file_key, env.ASSET_ORIGIN).href,
     can_edit: canEdit(row, user)
   }));
   return json({ resources, user: user ? { can_upload: user.student, admin: user.admin } : null });
@@ -172,13 +172,18 @@ async function modifyResource(request, env, id) {
 }
 
 async function route(request, env) {
-  const { pathname } = new URL(request.url);
+  const url = new URL(request.url);
+  const { pathname } = url;
   const method = request.method;
   if (method === 'OPTIONS') return new Response(null, { status: 204 });
-  if (method === 'GET' && pathname === '/resources') return listResources(request, env);
-  if (method === 'POST' && pathname === '/upload') return upload(request, env);
   const file = pathname.match(/^\/files\/([a-f0-9-]{36}\.pdf)$/);
   if (method === 'GET' && file) return getFile(file[1], env);
+  // The deployed assets hostname serves PDFs only; localhost serves both.
+  if (url.origin === env.ASSET_ORIGIN && url.hostname !== 'localhost') {
+    throw new HttpError(404, 'Endpoint not found.');
+  }
+  if (method === 'GET' && pathname === '/resources') return listResources(request, env);
+  if (method === 'POST' && pathname === '/upload') return upload(request, env);
   const resource = pathname.match(/^\/resources\/([1-9]\d*)$/);
   if (resource && ['PATCH', 'DELETE'].includes(method)) {
     return modifyResource(request, env, resource[1]);

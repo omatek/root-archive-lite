@@ -8,7 +8,12 @@ preview_urls = false
 pattern = "api-lite.rootamman.com"
 custom_domain = true
 
+[[routes]]
+pattern = "assets-lite.rootamman.com"
+custom_domain = true
+
 [vars]
+ASSET_ORIGIN = "https://assets-lite.rootamman.com"
 ALLOWED_ORIGIN = "https://archive-lite.rootamman.com"
 GOOGLE_CLIENT_ID = "REPLACE_WITH_LITE_CLIENT_ID.apps.googleusercontent.com"
 STUDENT_EMAIL_DOMAIN = "std.aum.edu.jo"
