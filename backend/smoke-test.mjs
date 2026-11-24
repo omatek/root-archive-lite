@@ -33,3 +33,16 @@ for (const [method,path] of [['GET','/resources'],['POST','/upload'],['PATCH','/
   await request(assets + path, {method,headers:origin},404);
 }
 console.log('PASS live read-only and rejected-mutation smoke checks');
+
+const probeKey = process.env.LITE_TEST_ASSET_KEY;
+if (probeKey) {
+  const url = assets + '/files/' + probeKey;
+  const resource = listing.resources.find(r => r.asset_url === url);
+  assert.ok(resource, 'Seeded PDF should appear in the API listing');
+  assert.ok(!('owner_id' in resource), 'Public metadata must omit owner_id');
+  const pdf = await request(url);
+  assert.match(pdf.headers.get('content-type') || '', /^application\/pdf/);
+  const bytes = new Uint8Array(await pdf.arrayBuffer());
+  assert.equal(new TextDecoder().decode(bytes.slice(0,5)), '%PDF-');
+  console.log('PASS seeded synthetic PDF served through private R2 via asset hostname');
+}
